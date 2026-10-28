@@ -94,6 +94,15 @@ final class Config {
     final boolean dateBelowClock;
     /** The VPN state as its own pill after the network pill, instead of a badge inside it (config.xml, vpn_pill). */
     final boolean vpnPill;
+    /** The gear opens the macOS-style Control Centre instead of the launcher settings menu (config.xml, control_center). */
+    final boolean controlCenter;
+    /** Bluetooth as its own pill in the header, showing on/off and the connected device (config.xml, bt_pill). */
+    final boolean btPill;
+    /**
+     * Home starts with the clock focused instead of the first tile (config.xml, focus_clock_first): no tile is
+     * lit while the screen sits idle, so the ambient and edge glows stay off until something is actually picked.
+     */
+    final boolean focusClockFirst;
     /** Language tag the launcher shows itself in instead of the TV's, or "" for the TV's (config.xml, locale). */
     final String locale;
     /** Name after the greeting ("Good morning, Mr. Trịnh"); empty for the greeting alone. */
@@ -174,6 +183,10 @@ final class Config {
     final boolean powerOnHomeAlways;
     /** The Inputs menu lists only inputs reporting connected; the rest fold behind a More inputs row (config.xml / theme inputs_connected_only). */
     final boolean inputsConnectedOnly;
+    /** The clock and date in Home's header (config.xml, home_clock); false hides them there, the screensaver keeps its clock. */
+    final boolean homeClock;
+    /** The cinematic shelf follows every focused tile, in a band over the top of the screen (config.xml, cinematic_grid). */
+    final boolean cinematicGrid;
     /** The Settings button opens the quick settings panel instead of the TV's Settings (settings_key_panel). */
     final boolean settingsKeyPanel;
     /** Home puts the remote's accessibility helpers back after a force stop (restore_key_services; ServiceRepair). */
@@ -223,17 +236,27 @@ final class Config {
     final boolean wifiStatusColor;
     /** Opacity of the app's artwork behind the cinematic shelf, 0 to 100 (config.xml, cinematic_art); 50 as before. */
     final int cinematicArt;
+    /**
+     * How far down the screen the shelf's artwork reaches, as a share of the height (config.xml, cinematic_band);
+     * 0.40 keeps the old band over the top, 1.0 floods the whole screen the way tvOS does and lets the scrim fade
+     * it to black under the rows.
+     */
+    final float cinematicBand;
     /** Strength of the cinematic shelf's dark scrim, 0 to 100 percent (config.xml, cinematic_scrim); 100 as before. */
     final int cinematicScrim;
+    /** Strength of the side glow in the focused app's colour, 0 (off, the default) to 100 (config.xml, edge_glow). */
+    final int edgeGlow;
     /** A rotating collection's groups by time of day, as file names (config.xml, wallpaper_moods); empty rotates through all of it. */
     final Map<String, Set<String>> wallpaperMoods;
     /** Shape of the glow behind the focused app (config.xml, glow_style): {@link #GLOW_RADIAL} or {@link #GLOW_HORIZON}. */
     final String glowStyle;
-    /** The focus highlight's look (config.xml, glass_style): {@link #GLASS_DEFAULT}, {@link #GLASS_RIM} or {@link #GLASS_HALO}. */
+    /** The focus highlight's look (config.xml, glass_style): {@link #GLASS_DEFAULT}, {@link #GLASS_RIM}, {@link #GLASS_HALO} or {@link #GLASS_TV}. */
     final String glassStyle;
 
     static final String GLOW_RADIAL = "radial", GLOW_HORIZON = "horizon";
     static final String GLASS_DEFAULT = "glass", GLASS_RIM = "rim", GLASS_HALO = "halo";
+    /** tvOS-style focus: the tile grows a little less, lifts on a soft shadow, and gets a top sheen and a white glow, no rim. */
+    static final String GLASS_TV = "tv";
     /** Show each rotating wallpaper's name from wallpapers/captions.txt (config.xml / theme wallpaper_captions). */
     final boolean wallpaperCaptions;
     /** Answer VIEW_INPUTS with the Inputs menu (handle_view_inputs); see InputsRequestActivity. */
@@ -271,8 +294,9 @@ final class Config {
                    Festival festival, int[] inputKeycodes, List<String> appKeys, String stockHomeRedirect,
                    List<RaceWeekend.Race> raceCalendar, boolean cinematicHome, boolean ambientGlow, boolean appGlow, boolean fadeRows, int homeIdleClockMinutes,
                    boolean keyFilter, boolean dockGlass, String glowStyle, boolean wallpaperCaptions,
-                   boolean handleViewInputs, boolean tileMenu, boolean dockEvenPadding, boolean dockBand, boolean cinematicDots, boolean cinematicWhiteFocus, boolean wifiStatusColor, int cinematicScrim, int cinematicArt,
-                   Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, String locale, boolean powerOnHomeAlways, boolean inputsConnectedOnly) {
+                   boolean handleViewInputs, boolean tileMenu, boolean dockEvenPadding, boolean dockBand, boolean cinematicDots, boolean cinematicWhiteFocus, boolean wifiStatusColor, int cinematicScrim, int cinematicArt, int cinematicBand,
+                   Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, boolean controlCenter, boolean btPill, String locale, boolean powerOnHomeAlways, boolean inputsConnectedOnly,
+                   boolean homeClock, boolean cinematicGrid, int edgeGlow, boolean focusClockFirst) {
         this.handleViewInputs = handleViewInputs;
         this.tileMenu = tileMenu;
         this.inputKeycodes = inputKeycodes;
@@ -305,6 +329,9 @@ final class Config {
         this.lunarUtcOffset = lunarUtcOffset;
         this.dateBelowClock = dateBelowClock;
         this.vpnPill = vpnPill;
+        this.controlCenter = controlCenter;
+        this.btPill = btPill;
+        this.focusClockFirst = focusClockFirst;
         this.locale = locale;
         this.greetingName = greetingName;
         this.moduleCards = moduleCards;
@@ -360,6 +387,7 @@ final class Config {
         this.cinematicWhiteFocus = cinematicWhiteFocus;
         this.wifiStatusColor = wifiStatusColor;
         this.cinematicArt = cinematicArt;
+        this.cinematicBand = Math.max(0.25f, Math.min(1f, cinematicBand / 100f));
         this.cinematicScrim = cinematicScrim;
         this.wallpaperMoods = wallpaperMoods;
         this.gamepadPassthrough = gamepadPassthrough;
@@ -368,6 +396,9 @@ final class Config {
         this.homeLongPressHome = homeLongPressHome;
         this.powerOnHomeAlways = powerOnHomeAlways;
         this.inputsConnectedOnly = inputsConnectedOnly;
+        this.homeClock = homeClock;
+        this.cinematicGrid = cinematicGrid;
+        this.edgeGlow = edgeGlow;
         this.wifiStatusWarnings = wifiStatusWarnings;
         this.topBarApps = Collections.unmodifiableList(topBarApps);
         this.showGreeting = showGreeting;
@@ -392,6 +423,7 @@ final class Config {
         if (value == null) return GLASS_DEFAULT;
         String v = value.trim();
         if (GLASS_RIM.equalsIgnoreCase(v)) return GLASS_RIM;
+        if (GLASS_TV.equalsIgnoreCase(v)) return GLASS_TV;
         return GLASS_HALO.equalsIgnoreCase(v) ? GLASS_HALO : GLASS_DEFAULT;
     }
 
@@ -476,6 +508,8 @@ final class Config {
         boolean homeLongPressHome = res.getBoolean(R.bool.home_long_press_home);
         boolean powerOnHomeAlways = res.getBoolean(R.bool.power_on_home_always);
         boolean inputsConnectedOnly = res.getBoolean(R.bool.inputs_connected_only);
+        boolean homeClock = res.getBoolean(R.bool.home_clock);
+        boolean cinematicGrid = res.getBoolean(R.bool.cinematic_grid);
         boolean dockGlass = res.getBoolean(R.bool.dock_glass);
         boolean dockEvenPadding = res.getBoolean(R.bool.dock_even_padding);
         boolean dockBand = res.getBoolean(R.bool.dock_band);
@@ -483,12 +517,17 @@ final class Config {
         boolean cinematicWhiteFocus = res.getBoolean(R.bool.cinematic_white_focus);
         boolean wifiStatusColor = res.getBoolean(R.bool.wifi_status_color);
         int cinematicArt = res.getInteger(R.integer.cinematic_art);
+        int cinematicBand = res.getInteger(R.integer.cinematic_band);
         int cinematicScrim = res.getInteger(R.integer.cinematic_scrim);
+        int edgeGlow = res.getInteger(R.integer.edge_glow);
         Map<String, Set<String>> wallpaperMoods = moods(res.getString(R.string.wallpaper_moods));
         String glowStyle = res.getString(R.string.glow_style);
         boolean wifiStatusWarnings = res.getBoolean(R.bool.wifi_status_warnings);
         boolean dateBelowClock = res.getBoolean(R.bool.date_below_clock);
         boolean vpnPill = res.getBoolean(R.bool.vpn_pill);
+        boolean controlCenter = res.getBoolean(R.bool.control_center);
+        boolean btPill = res.getBoolean(R.bool.bt_pill);
+        boolean focusClockFirst = res.getBoolean(R.bool.focus_clock_first);
         String locale = res.getString(R.string.locale).trim();
         List<String> topBarApps = new ArrayList<>(Arrays.asList(res.getStringArray(R.array.top_bar_apps)));
         boolean showGreeting = res.getBoolean(R.bool.show_greeting);
@@ -581,6 +620,8 @@ final class Config {
             homeLongPressHome = bool(json, "home_long_press_home", homeLongPressHome);
             powerOnHomeAlways = bool(json, "power_on_home_always", powerOnHomeAlways);
             inputsConnectedOnly = bool(json, "inputs_connected_only", inputsConnectedOnly);
+            homeClock = bool(json, "home_clock", homeClock);
+            cinematicGrid = bool(json, "cinematic_grid", cinematicGrid);
             dockGlass = bool(json, "dock_glass", dockGlass);
             dockEvenPadding = bool(json, "dock_even_padding", dockEvenPadding);
             dockBand = bool(json, "dock_band", dockBand);
@@ -588,12 +629,17 @@ final class Config {
             cinematicWhiteFocus = bool(json, "cinematic_white_focus", cinematicWhiteFocus);
             wifiStatusColor = bool(json, "wifi_status_color", wifiStatusColor);
             cinematicArt = integer(json, "cinematic_art", cinematicArt, 0, 100);
+            cinematicBand = integer(json, "cinematic_band", cinematicBand, 25, 100);
             cinematicScrim = integer(json, "cinematic_scrim", cinematicScrim, 0, 100);
+            edgeGlow = integer(json, "edge_glow", edgeGlow, 0, 100);
             JSONObject moods = json.optJSONObject("wallpaper_moods");
             if (moods != null) wallpaperMoods = moods(moods);
             wifiStatusWarnings = bool(json, "wifi_status_warnings", wifiStatusWarnings);
             dateBelowClock = bool(json, "date_below_clock", dateBelowClock);
             vpnPill = bool(json, "vpn_pill", vpnPill);
+            controlCenter = bool(json, "control_center", controlCenter);
+            btPill = bool(json, "bt_pill", btPill);
+            focusClockFirst = bool(json, "focus_clock_first", focusClockFirst);
             locale = string(json, "locale", locale).trim();
             topBarApps = stringList(json, "top_bar_apps", topBarApps);
             showGreeting = bool(json, "show_greeting", showGreeting);
@@ -662,10 +708,11 @@ final class Config {
                 wallpapers, rotationMinutes, wallpaperDim, dockOpacity, wallpaperOrder, applied, festival, inputKeycodes, appKeys, stockHomeRedirect,
                 json == null ? Collections.emptyList() : raceCalendar(json), cinematic, ambientGlow, appGlow, fadeRows,
                 Math.max(0, idleClockMinutes), keyFilter, dockGlass, glowStyle, wallpaperCaptions, handleViewInputs, tileMenu, dockEvenPadding,
-                dockBand, cinematicDots, cinematicWhiteFocus, wifiStatusColor, cinematicScrim, cinematicArt, wallpaperMoods, gamepadPassthrough,
+                dockBand, cinematicDots, cinematicWhiteFocus, wifiStatusColor, cinematicScrim, cinematicArt, cinematicBand, wallpaperMoods, gamepadPassthrough,
                 consumeVolumeKeys, powerOnHome, homeLongPressHome, wifiStatusWarnings, topBarApps, showGreeting, headerWhite, clockWallpaper,
                 Math.max(0, Math.min(90, clockWallpaperDim)), clockGlow, glassStyle, singleRow && dockRow, dockBandAll, lunar, lunarOffset,
-                dateBelowClock, vpnPill, locale, powerOnHomeAlways, inputsConnectedOnly);
+                dateBelowClock, vpnPill, controlCenter, btPill, locale, powerOnHomeAlways, inputsConnectedOnly,
+                homeClock, cinematic && cinematicGrid, edgeGlow, focusClockFirst);
     }
 
     /**

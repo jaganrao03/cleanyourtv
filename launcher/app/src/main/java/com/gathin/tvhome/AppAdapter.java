@@ -96,8 +96,11 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     }
 
     static final float FOCUS_SCALE = 1.10f;
-    /** Design size of a tile (dp); tiles shrink from here when the columns don't fit, see tileWidthPx. */
-    static final float DESIGN_W_DP = 180f, DESIGN_H_DP = 101f;
+    /**
+     * Design size of a tile (dp); tiles shrink from here when the columns don't fit, see tileWidthPx.
+     * tvOS icon ratio: 400x240 in Apple's own sizes, so a 180dp tile is 111dp tall, not the old 101.
+     */
+    static final float DESIGN_W_DP = 180f, DESIGN_H_DP = 111f;
 
     /**
      * Tile width for a grid of this inner width: the cell minus room for the focus zoom and the glass
@@ -143,6 +146,10 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     static final float TITLE_ROOM_DP = 104;
     /** dock_row false: room above the first row for its zoom and glass (MainActivity places the grid with it). */
     static final float TOP_ROOM_DP = 12;
+    /** single_row: how far the row moves down from its parked spot when the names show, tvOS-style under the icons. */
+    static final float SINGLE_ROW_SIT_DP = 31;
+    /** The same with the names hidden: the 7dp gap and the 22dp label room item_app keeps can go back to the row. */
+    static final float SINGLE_ROW_SIT_HIDDEN_DP = 29;
 
     /**
      * Tile width that fits the columns across and, with rows_below_dock > 0, the dock (with its title above it,
@@ -166,8 +173,12 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         return Math.max(Math.max(Math.round(80 * density), Math.round(w * MIN_HEIGHT_FIT)), Math.min(w, byHeight));
     }
 
-    /** The smallest share of the width-only tile size that fitting rows_below_dock into the height may go to. */
-    static final float MIN_HEIGHT_FIT = 0.85f;
+    /**
+     * The smallest share of the width-only tile size that fitting rows_below_dock into the height may go to.
+     * 0.80 rather than 0.85 because the 180:111 tvOS icon ratio is ten dp taller: at 0.85 a row under a titled
+     * dock no longer fitted and ran off the bottom of the screen.
+     */
+    static final float MIN_HEIGHT_FIT = 0.80f;
 
     private final Context ctx;
     private final int rowsBelowDock;
@@ -188,6 +199,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private final float restNameAlpha;
     /** cinematic_home: only then does a launch record the last-opened app the shelf uses. */
     private final boolean cinematic;
+    /** glass_style tv: the focused tile grows to 1.08 and lifts on a soft shadow, keeping its own fill. */
+    private final boolean tvFocus;
     /** Dock order (config.xml dock_apps, or a theme's config.json). */
     private final List<String> favourites;
     /** Grid apps fill the dock slots dock_apps leaves free (config.xml, fill_dock). */
@@ -240,6 +253,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         this.singleRow = cfg.singleRow;
         this.restNameAlpha = cfg.alwaysShowNames ? 0.75f : 0f;
         this.cinematic = cfg.cinematicHome;
+        this.tvFocus = Config.GLASS_TV.equals(cfg.glassStyle);
         this.launchActions = cfg.launchActions;
         this.iconTiles = new HashSet<>(Arrays.asList(ctx.getResources().getStringArray(R.array.icon_tiles)));
         this.tileMenu = cfg.tileMenu;
@@ -295,14 +309,17 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                     appLabels.containsKey(pkg) ? appLabels.get(pkg) : String.valueOf(ri.loadLabel(pm)), pkg);
             if (!seen.add(pkg + '\n' + label)) continue;
             Drawable banner = null;
+            // A few apps must show their conventional logo instead of their own launcher artwork.
+            Drawable brand = brandIcon(pkg);
             // uniform_tiles draws the icon, so an app's banner is never loaded. A module card keeps its banner.
             if (!(uniformTiles && card == null)) {
                 banner = bundledBanner(appBanners.get(pkg));
+                if (banner == null && brand != null) banner = iconBanner(brand);
                 if (banner == null) banner = iconTiles.contains(pkg) ? iconBanner(ri.loadIcon(pm)) : loadBanner(pm, ri);
             }
             // The icon is only drawn (and sampled for the glow) when there is no banner, so a tile with a
             // banner skips loading and decoding it.
-            Drawable icon = banner == null ? ri.loadIcon(pm) : null;
+            Drawable icon = banner == null ? (brand != null ? brand : ri.loadIcon(pm)) : null;
             if (card != null) {
                 fresh.add(new Entry(Entry.CARD, label, component, banner, icon, card.caption, card.accent));
             } else {
@@ -341,6 +358,17 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         items.clear();
         items.addAll(fresh);
         notifyDataSetChanged();
+    }
+
+    /**
+     * The conventional logo a package must show instead of its own launcher artwork, or null. TizenTube is an
+     * ad-free YouTube client whose own icon is unfamiliar; on this TV it draws the YouTube play mark.
+     */
+    private Drawable brandIcon(String pkg) {
+        if ("io.gh.reisxd.tizentube.cobalt".equals(pkg) || "io.gh.reisxd.tizentube".equals(pkg)) {
+            return ctx.getDrawable(R.drawable.ic_youtube);
+        }
+        return null;
     }
 
     /** icon_tiles: the app's icon centred on a dark banner-shaped tile, for apps whose own banner crops badly. */
@@ -450,7 +478,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             View label = v.findViewById(R.id.label);
             label.setPadding(label.getPaddingLeft(), label.getPaddingTop(), label.getPaddingRight(), Math.round(4f * density));
         }
-        return new Holder(v, listener, animations, advancedEffects, reducedMotion, restNameAlpha, focusOvershoot);
+        return new Holder(v, listener, animations, advancedEffects, reducedMotion, restNameAlpha, focusOvershoot, tvFocus);
     }
 
     @Override
@@ -480,8 +508,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         h.name.setAlpha(focused ? 1f : restNameAlpha);
         h.card.setScaleX(focused && animations ? focusScale() : 1f);
         h.card.setScaleY(focused && animations ? focusScale() : 1f);
-        h.card.setTranslationY(focused && advancedEffects ? -4f * ctx.getResources().getDisplayMetrics().density : 0f);
-        h.card.setTranslationZ(focused && advancedEffects ? 8f * ctx.getResources().getDisplayMetrics().density : 0f);
+        h.card.setTranslationY(focused ? h.liftPx() : 0f);
+        h.card.setTranslationZ(focused ? h.elevationPx() : 0f);
         h.banner.setScaleX(focused && advancedEffects ? 1.035f : 1f);
         h.banner.setScaleY(focused && advancedEffects ? 1.035f : 1f);
         // A fully opaque banner covers the whole card (centerCrop), so the card's own fill under it is drawn for
@@ -666,8 +694,15 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     }
 
     float focusScale() {
-        return !animations ? 1f : advancedEffects ? 1.12f : 1.10f;
+        return focusScale(animations, advancedEffects, tvFocus);
     }
+
+    static float focusScale(boolean animations, boolean advancedEffects, boolean tvFocus) {
+        return !animations ? 1f : tvFocus ? TV_FOCUS_SCALE : advancedEffects ? 1.12f : 1.10f;
+    }
+
+    /** glass_style tv: tvOS grows the focused tile by about 8%. */
+    static final float TV_FOCUS_SCALE = 1.08f;
 
     /** A vivid colour sampled from the app's banner (or icon), cached per entry; a card's accent when it set one. */
     int ambientColorAt(int position) {
@@ -887,9 +922,12 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         /** Alpha of the name while the tile is not focused (always_show_names). */
         final float restNameAlpha;
         final boolean overshoot;
+        /** glass_style tv: a smaller zoom, and a lift onto a soft shadow even without advanced effects. */
+        final boolean tvFocus;
+        final float density;
 
         Holder(View v, TileListener listener, boolean animations, boolean advancedEffects,
-               boolean reducedMotion, float restNameAlpha, boolean overshoot) {
+               boolean reducedMotion, float restNameAlpha, boolean overshoot, boolean tvFocus) {
             super(v);
             card = v.findViewById(R.id.card);
             cardBackground = card.getBackground();
@@ -902,8 +940,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             this.reducedMotion = reducedMotion;
             this.restNameAlpha = restNameAlpha;
             this.overshoot = overshoot;
+            this.tvFocus = tvFocus;
 
-            final float density = v.getResources().getDisplayMetrics().density;
+            density = v.getResources().getDisplayMetrics().density;
             card.setOutlineProvider(new ViewOutlineProvider() {
                 @Override
                 public void getOutline(View view, Outline outline) {
@@ -925,7 +964,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 view.animate().cancel();
                 banner.animate().cancel();
                 name.animate().cancel();
-                float scale = !animations ? 1f : advancedEffects ? 1.12f : 1.10f;
+                float scale = focusScale(animations, advancedEffects, tvFocus);
                 float s = focused ? scale : 1f;
                 if (!animations) {
                     view.setScaleX(1f);
@@ -940,8 +979,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                     // A short zoom with no hardware layer: building a layer for so short an animation costs more
                     // frames than it saves. The name just appears instead of fading.
                     view.animate().scaleX(s).scaleY(s)
-                            .translationY(focused && advancedEffects ? -4f * density : 0f)
-                            .translationZ(focused && advancedEffects ? 8f * density : 0f)
+                            .translationY(focused ? liftPx() : 0f)
+                            .translationZ(focused ? elevationPx() : 0f)
                             .setDuration(focused ? Motion.REDUCED_MS : 60)
                             .setInterpolator(new DecelerateInterpolator())
                             .start();
@@ -952,8 +991,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                     if (focused) name.setTranslationY(density * 4f);
                 } else {
                     view.animate().scaleX(s).scaleY(s)
-                            .translationY(focused && advancedEffects ? -4f * density : 0f)
-                            .translationZ(focused && advancedEffects ? 8f * density : 0f)
+                            .translationY(focused ? liftPx() : 0f)
+                            .translationZ(focused ? elevationPx() : 0f)
                             .setDuration(advancedEffects ? (focused ? 220 : 170) : (focused ? 260 : 180))
                             .setInterpolator(focused && !overshoot ? new DecelerateInterpolator(1.5f)
                                     : new OvershootInterpolator(focused ? (advancedEffects ? 0.7f : 1.6f) : 0f))
@@ -971,6 +1010,16 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                     listener.onTileFocused(pos, view);
                 }
             });
+        }
+
+        /** How far the focused tile rises: 4dp with advanced effects or glass_style tv, else none. */
+        float liftPx() {
+            return advancedEffects || tvFocus ? -4f * density : 0f;
+        }
+
+        /** The focused tile's elevation: glass_style tv lifts it onto a wide soft shadow, advanced effects a light one. */
+        float elevationPx() {
+            return tvFocus ? 16f * density : advancedEffects ? 8f * density : 0f;
         }
     }
 }

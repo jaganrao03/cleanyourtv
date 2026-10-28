@@ -5,6 +5,7 @@ import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
+import android.graphics.Rect;
 import android.graphics.Shader;
 import android.view.View;
 
@@ -22,17 +23,70 @@ import androidx.recyclerview.widget.RecyclerView;
 final class TopFade extends RecyclerView.ItemDecoration {
 
     private final float length;
+    /** cinematic_grid: rows more than this above the grid's top padding (the parked row) are erased; -1 off. */
+    private final float bandGap;
+    /** cinematic_grid: room kept clear above the focused tile's zoomed top, for its glass and lift. */
+    private final float reach;
+    private final Rect hit = new Rect();
     private final Paint paint = new Paint();
     private float shaderHeight = -1f;
+    private final Paint clear = new Paint();
 
-    private TopFade(float length) {
+    private TopFade(float length, float bandGap, float reach) {
         this.length = length;
+        this.bandGap = bandGap;
+        this.reach = reach;
+        clear.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));
         paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
     }
 
     static void attach(RecyclerView grid, float length) {
         grid.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-        grid.addItemDecoration(new TopFade(length));
+        grid.addItemDecoration(new TopFade(length, -1f, 0f));
+    }
+
+    /**
+     * cinematic_grid: everything above {@code gap} over the grid's top padding is erased, with a fade over the last
+     * {@code length}, so the rows above the focused one vanish under the shelf instead of covering it. The erasing
+     * always stops {@code reach} above the focused tile's zoomed top, so only the rows above it fade, never its own top.
+     */
+    static void attachBand(RecyclerView grid, float length, float gap, float reach) {
+        grid.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        grid.addItemDecoration(new TopFade(length, gap, reach));
+    }
+
+    /**
+     * Where the band's erasing ends: the parked line, or higher while the focused tile (its top {@code focusedTop},
+     * NaN when no tile has focus) reaches above it, zoomed or still scrolling in.
+     */
+    static float bandEdge(float parked, float focusedTop, float reach) {
+        if (Float.isNaN(focusedTop)) return parked;
+        return Math.min(parked, focusedTop - reach);
+    }
+
+    /** The focused tile's top in the grid, with its zoom and lift, or NaN when nothing in the grid has focus. */
+    private float focusedTop(RecyclerView parent) {
+        View item = parent.getFocusedChild();
+        if (item == null) return Float.NaN;
+        float top = item.getTop() + item.getTranslationY();
+        View card = item.findFocus();
+        if (card != null && card != item && card.getParent() == item) {
+            card.getHitRect(hit);   // the card's bounds in the item, after its scale and translation
+            top += hit.top;
+        }
+        return top;
+    }
+
+    private void drawBand(Canvas c, RecyclerView parent, float edge) {
+        float start = edge - length;
+        if (start > 0f) c.drawRect(0f, 0f, parent.getWidth(), start, clear);
+        if (edge <= 0f) return;
+        float from = Math.max(0f, start);
+        if (shaderHeight != edge) {
+            paint.setShader(new LinearGradient(0f, start, 0f, edge, 0xFF000000, 0x00000000, Shader.TileMode.CLAMP));
+            shaderHeight = edge;
+        }
+        c.drawRect(0f, from, parent.getWidth(), edge, paint);
     }
 
     /** How tall the fade is after scrolling {@code scrolled} pixels: nothing at rest, then up to {@code length}. */
@@ -42,6 +96,13 @@ final class TopFade extends RecyclerView.ItemDecoration {
 
     @Override
     public void onDrawOver(@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+        if (bandGap >= 0f) {
+            // At rest the dock is the top row: nothing above it to erase.
+            if (parent.computeVerticalScrollOffset() > 0) {
+                drawBand(c, parent, bandEdge(parent.getPaddingTop() - bandGap, focusedTop(parent), reach));
+            }
+            return;
+        }
         float fade = height(parent.computeVerticalScrollOffset(), length);
         if (fade <= 0f) return;
         if (fade != shaderHeight) {

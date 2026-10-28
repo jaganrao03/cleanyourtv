@@ -13,8 +13,11 @@ import android.graphics.drawable.LayerDrawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextClock;
 
 import java.io.File;
 import java.time.LocalDateTime;
@@ -146,6 +149,16 @@ final class ClockScene {
         }
         wallpaperShade = (cfg.clockWallpaperDim * 255 / 100) << 24;
         wallpaperRes = ctx.getResources();
+        if (wallpaperFile != null && content instanceof LinearLayout) {
+            // Mac-style photo clock: center the date above the time, both in the open sky.
+            LinearLayout stack = (LinearLayout) content;
+            if (stack.getChildCount() == 2 && stack.getChildAt(1) instanceof TextClock) {
+                View date = stack.getChildAt(1);
+                stack.removeView(date);
+                stack.addView(date, 0);
+            }
+            stack.setGravity(Gravity.CENTER_HORIZONTAL);
+        }
     }
 
     private void loadWallpaper() {
@@ -229,13 +242,21 @@ final class ClockScene {
         }).start();
     }
 
-    /** A random spot that keeps the whole clock on screen, with the glow centred behind it. */
+    /** Over photos, stay in the upper sky; without one, keep the original full-screen drift. */
     private void placeClock() {
         View parent = (View) content.getParent();
         int maxX = Math.max(0, parent.getWidth() - content.getWidth());
         int maxY = Math.max(0, parent.getHeight() - content.getHeight());
-        float x = maxX * (0.1f + 0.8f * random.nextFloat());
-        float y = maxY * (0.1f + 0.8f * random.nextFloat());
+        float x, y;
+        if (wallpaperFile != null) {
+            float[] point = LockClockPlacement.wallpaper(parent.getWidth(), parent.getHeight(),
+                    content.getWidth(), content.getHeight(), random.nextFloat(), random.nextFloat());
+            x = point[0];
+            y = point[1];
+        } else {
+            x = maxX * (0.1f + 0.8f * random.nextFloat());
+            y = maxY * (0.1f + 0.8f * random.nextFloat());
+        }
         content.setX(x);
         content.setY(y);
         if (parent.getWidth() > 0 && parent.getHeight() > 0) {

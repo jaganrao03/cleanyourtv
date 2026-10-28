@@ -24,7 +24,7 @@
     <string name="cant_open">Can\'t open %1$s</string>
     <string name="date_format">EEEE  d MMMM</string>
     <!-- Date next to the clock on Home; a locale can split it over two lines with \n. -->
-    <string name="date_format_home" translatable="false">@string/date_format</string>
+    <string name="date_format_home">@string/date_format</string>
     <string name="shamsi_month_farvardin">Farvardin</string>
     <string name="shamsi_month_ordibehesht">Ordibehesht</string>
     <string name="shamsi_month_khordad">Khordad</string>
@@ -152,4 +152,12 @@
     <!-- Cinematic top shelf (cinematic_home): the line under the focused dock app's name; %1$s is when it was
          last opened, e.g. "5 minutes ago" or "yesterday, 9:40 pm". -->
     <string name="last_opened">Last opened %1$s</string>
+    <string name="control_center">Control Centre</string>
+    <string name="cc_home_short">Home</string>
+    <string name="cc_reorder_short">Reorder</string>
+    <string name="bluetooth">Bluetooth</string>
+    <string name="cc_picture_settings">Picture settings</string>
+    <string name="cc_sound_settings">Sound settings</string>
+    <string name="cc_open">Open</string>
+    <string name="cc_muted">Muted</string>
 </resources>

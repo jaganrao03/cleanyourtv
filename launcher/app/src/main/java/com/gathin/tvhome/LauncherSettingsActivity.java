@@ -7,9 +7,18 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.BitmapDrawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
+import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.CheckedTextView;
 import android.widget.TextView;
 import android.widget.LinearLayout;
 import android.widget.Toast;
@@ -18,6 +27,12 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /** Remote-friendly settings owned by the launcher; system settings stay one row away. */
 public final class LauncherSettingsActivity extends Activity {
@@ -42,6 +57,9 @@ public final class LauncherSettingsActivity extends Activity {
     private int dockOpacity;
     private boolean animations;
     private boolean advancedEffects;
+    /** Kept so a picker still open when the activity dies is dismissed and its thread stopped. */
+    private AlertDialog wallpaperPicker;
+    private WallpaperPreviews wallpaperPreviews;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -175,14 +193,49 @@ public final class LauncherSettingsActivity extends Activity {
         File single = dir == null ? null : new File(dir, Config.WALLPAPER_NAME);
         if (single != null && single.isFile()) images.add(0, single);
         String[] labels = new String[images.size() + 1];
-        for (int i = 0; i < images.size(); i++) labels[i] = images.get(i).getName();
+        for (int i = 0; i < images.size(); i++) {
+            String filename = images.get(i).getName();
+            labels[i] = filename.replaceFirst("(?i)\\.(jpg|jpeg|png|webp)$", "").replace('-', ' ');
+        }
         labels[images.size()] = getString(R.string.wallpaper_none);
         String current = choices.getString(Config.WALLPAPER_CHOICE_KEY, null);
         int checked = "none".equals(current) ? images.size()
                 : indexOf(images, current);
-        new AlertDialog.Builder(this)
+        // A file-name-only picker hid the actual collection from the TV owner. Sample each image
+        // to a small preview rather than decoding 32 full 4K frames into a dialog — and decode off
+        // the main thread, because doing it inside getView() made the D-pad scroll stutter.
+        final WallpaperPreviews previews = new WallpaperPreviews();
+        wallpaperPreviews = previews;
+        final float scale = getResources().getDisplayMetrics().density;
+        final int thumbWidth = Math.round(140 * scale);
+        final int thumbHeight = Math.round(79 * scale);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
+                android.R.layout.simple_list_item_single_choice, labels) {
+            @Override public View getView(int position, View convertView, ViewGroup parent) {
+                CheckedTextView row = (CheckedTextView) super.getView(position, convertView, parent);
+                row.setMinHeight(Math.round(90 * scale));
+                row.setTextSize(18);
+                row.setCompoundDrawablePadding(Math.round(12 * scale));
+                if (position >= images.size()) {
+                    row.setCompoundDrawablesRelative(null, null, null, null);
+                    return row;
+                }
+                final File image = images.get(position);
+                Bitmap preview = previews.cached(image.getName());
+                if (preview != null) {
+                    setPreview(row, preview, thumbWidth, thumbHeight);
+                    return row;
+                }
+                row.setCompoundDrawablesRelative(null, null, null, null);
+                if (previews.shouldLoad(image.getName())) {
+                    previews.load(image, () -> notifyDataSetChanged());
+                }
+                return row;
+            }
+        };
+        AlertDialog picker = new AlertDialog.Builder(this)
                 .setTitle(R.string.wallpaper_label)
-                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                .setSingleChoiceItems(adapter, checked, (dialog, which) -> {
                     dialog.dismiss();
                     if (which == images.size()) {
                         choices.edit().putString(Config.WALLPAPER_CHOICE_KEY, "none").apply();
@@ -200,7 +253,105 @@ public final class LauncherSettingsActivity extends Activity {
                     refresh();
                 })
                 .setNegativeButton(android.R.string.cancel, null)
-                .show();
+                .create();
+        // Drop every cached preview when the dialog goes away; 32 previews are ~4 MB on this TV.
+        wallpaperPicker = picker;
+        picker.setOnDismissListener(dialog -> releasePreviews(previews, picker));
+        picker.show();
+    }
+
+    /** Idempotent teardown; identity-checked so a stale dismiss cannot close a newer picker. */
+    private void releasePreviews(WallpaperPreviews loader, AlertDialog dialog) {
+        if (loader != null) loader.close();
+        if (wallpaperPreviews == loader) wallpaperPreviews = null;
+        if (wallpaperPicker == dialog) wallpaperPicker = null;
+    }
+
+    @Override
+    protected void onDestroy() {
+        // HOME, a config change or a trim can kill the activity with the picker still up; the
+        // dismiss listener never fires then, so the decode thread and its cache are stopped here.
+        AlertDialog picker = wallpaperPicker;
+        if (picker != null && picker.isShowing()) picker.dismiss();
+        releasePreviews(wallpaperPreviews, picker);
+        super.onDestroy();
+    }
+
+    /**
+     * Thumbnail loader for the picker: one worker thread, callbacks funnelled through the main
+     * handler, and a single idempotent {@link #close()} — so a decode that finishes after the
+     * dialog closed can never put a bitmap back into a cache nobody will draw.
+     */
+    private static final class WallpaperPreviews {
+        private final Map<String, Bitmap> ready = new HashMap<>();
+        private final Set<String> loading = new HashSet<>();
+        private final Set<String> failed = new HashSet<>();
+        private final ExecutorService worker = Executors.newSingleThreadExecutor();
+        private final Handler main = new Handler(Looper.getMainLooper());
+        private boolean closed;
+
+        Bitmap cached(String name) {
+            return ready.get(name);
+        }
+
+        /** True only the first time a file is asked for, and never after close(). */
+        boolean shouldLoad(String name) {
+            return !closed && !failed.contains(name) && loading.add(name);
+        }
+
+        void load(File file, Runnable onLoaded) {
+            worker.execute(() -> {
+                Bitmap decoded = null;
+                try {
+                    decoded = samplePreview(file);
+                } catch (Throwable t) {
+                    // A decode that throws (OOM on a huge JPEG, corrupt file) must not reach the
+                    // thread's uncaught handler, which would take the launcher down with it.
+                    Log.w("LauncherSettings", "preview decode failed for " + file.getName(), t);
+                }
+                final Bitmap result = decoded;
+                main.post(() -> {
+                    loading.remove(file.getName());
+                    if (result == null) {
+                        failed.add(file.getName());   // a file that will not decode is not retried
+                        return;
+                    }
+                    if (closed) {
+                        result.recycle();             // nothing will ever draw this bitmap
+                        return;
+                    }
+                    ready.put(file.getName(), result);
+                    onLoaded.run();
+                });
+            });
+        }
+
+        void close() {
+            if (closed) return;
+            closed = true;
+            worker.shutdownNow();
+            main.removeCallbacksAndMessages(null);
+            ready.clear();                            // rows left with the dialog; let GC reclaim them
+            loading.clear();
+        }
+    }
+
+    /** RTL-aware preview column: Hebrew layouts put the thumbnail on the right. */
+    private static void setPreview(CheckedTextView row, Bitmap preview, int width, int height) {
+        BitmapDrawable thumb = new BitmapDrawable(row.getResources(), preview);
+        thumb.setBounds(0, 0, width, height);
+        row.setCompoundDrawablesRelative(thumb, null, null, null);
+    }
+
+    /** Bounds first, then a sampled decode — the heavy part, always called off the main thread. */
+    private static Bitmap samplePreview(File image) {
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(image.getPath(), options);
+        if (options.outWidth <= 0 || options.outHeight <= 0) return null;
+        options.inSampleSize = WallpaperRotation.thumbnailSampleSize(options.outWidth, options.outHeight);
+        options.inJustDecodeBounds = false;
+        return BitmapFactory.decodeFile(image.getPath(), options);
     }
 
     /** Off, then every app with a TV entry point by name. Saved at once; it is read on the next boot. */

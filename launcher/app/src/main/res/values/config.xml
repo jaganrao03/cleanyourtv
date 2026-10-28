@@ -234,6 +234,9 @@
     <!-- The date (with the Shamsi and lunar lines) on its own line under the clock instead of beside it, for a top bar
          whose pills leave the date too little room. Can also be set with "date_below_clock" in a theme. -->
     <bool name="date_below_clock">false</bool>
+    <!-- The clock and the date in Home's header. false hides them on Home only (tvOS has no clock there); the clock
+         screensaver keeps its clock. Can also be set with "home_clock": false in a theme's config.json. -->
+    <bool name="home_clock">true</bool>
     <!-- The language the launcher shows itself in, as a language tag ("vi", "pt-BR", "ar-EG-u-nu-latn"
          for Arabic with Western digits), instead of the TV's. For firmware
          that has no menu entry for the owner's language although the launcher is translated into it (a China-market
@@ -259,6 +262,17 @@
          the app says disconnected (it holds the tunnel to block traffic), so the pill stays green then. Can also be
          set with "vpn_pill" in a theme. -->
     <bool name="vpn_pill">false</bool>
+    <!-- The gear opens a macOS-style Control Centre — Wi-Fi, Bluetooth, VPN, brightness, inputs and settings as
+         frosted status tiles — instead of the launcher settings menu. Hold OK on the gear still opens the menu.
+         Can also be set with "control_center": true in a theme. -->
+    <bool name="control_center">false</bool>
+    <!-- Bluetooth as its own pill in the header, next to the network pill, showing on/off and the connected
+         device. Can also be set with "bt_pill": true in a theme. -->
+    <bool name="bt_pill">false</bool>
+    <!-- Home opens with the clock focused instead of the first tile, so nothing is lit — and the ambient and edge
+         glows stay off — until something is actually picked. D-pad down reaches the dock from there. Can also be
+         set with "focus_clock_first": true in a theme. -->
+    <bool name="focus_clock_first">false</bool>
     <!-- The dock as its own row: a lighter band, no names under the tiles, parked low on the screen with the top
          shelf above it. false makes the dock apps simply the first tiles of one plain grid (still in dock_apps
          order, no empty slots), with names under every tile and the glow behind every focused tile. -->
@@ -420,8 +434,9 @@
     <!-- Where the TV is, in decimal degrees, so the sky's sunrise and sunset glows follow the real sun
          (computed on the TV, no network). Empty: a fixed temperate day, sunset glow around 19:00.
          Vilnius: 54.69 and 25.28. -->
-    <string name="latitude" translatable="false"></string>
-    <string name="longitude" translatable="false"></string>
+    <!-- Austin, so the wallpaper moods' night group starts at the real sunset instead of the fixed 18:30. -->
+    <string name="latitude" translatable="false">30.2672</string>
+    <string name="longitude" translatable="false">-97.7431</string>
 
     <!-- Cinematic top shelf: the focused dock app's artwork, softened, fills the top of the screen in its
          colour; the shelf gets a larger name, a "Last opened" line (from the apps Home opened) and dock position
@@ -435,12 +450,25 @@
          for wallpapers and banners that clash with it; app_glow still colours every tile. Can also be set with
          "cinematic_white_focus": true in a theme's config.json. -->
     <bool name="cinematic_white_focus">false</bool>
+    <!-- With cinematic_home, true shows the shelf for every focused tile, not only the dock: the app's softened artwork
+         fills a band over the top 40% of the screen with its name (54sp) and the position dots in its row, and the
+         focused row moves up under the band while the rows above it fade out. Off by default; a theme can set
+         "cinematic_grid": true. -->
+    <bool name="cinematic_grid">false</bool>
     <!-- With cinematic_home, how much of a wallpaper the shelf covers: cinematic_scrim is the strength of the dark
          scrim that keeps the name readable (0 to 100 percent, 100 as before) and cinematic_art the opacity of the
          app's softened artwork (0 to 100, 50 as before; 0 leaves the wallpaper uncovered). Lower values let a
          theme's wallpaper show through. A theme can set "cinematic_scrim" and "cinematic_art". -->
     <integer name="cinematic_scrim">100</integer>
     <integer name="cinematic_art">50</integer>
+    <!-- With cinematic_home, how far down the screen that artwork reaches as a percentage of the height: 40 is the
+         band over the top that leaves the wallpaper and rows alone, 100 floods the whole screen the way tvOS does
+         (the scrim then fades it to near black under the rows). A theme can set "cinematic_band". -->
+    <integer name="cinematic_band">40</integer>
+    <!-- The left and right screen edges glow in the focused app's colour, fading inward over about a fifth of the
+         screen behind the tiles: 0 (the default) leaves it off, 100 is the strongest. Can also be set with
+         "edge_glow" in a theme's config.json. -->
+    <integer name="edge_glow">0</integer>
 
     <!-- The glow behind the dock in the focused app's colour (red for YouTube, blue for Prime Video). false keeps
          only background_color or the wallpaper behind everything. Can also be set with "ambient_glow": false in a
@@ -473,7 +501,9 @@
     <string name="glow_style" translatable="false">radial</string>
     <!-- The focus highlight's look: glass (the default: a translucent slab with a bright top sheen, a crisp rim and a
          faint outer glow), rim (the crisp rim alone, no sheen, fill or glow, for a quiet focus over a wallpaper) or
-         halo (the rim with a lighter outer glow). Can also be set with "glass_style": "rim" in a theme's config.json. -->
+         halo (the rim with a lighter outer glow), or tv (tvOS-like: the tile grows less, lifts on a soft shadow and keeps
+         its own fill, under a faint top sheen and a soft white glow, with no rim). Can also be set with
+         "glass_style": "rim" in a theme's config.json. -->
     <string name="glass_style" translatable="false">glass</string>
 
     <!-- Tiles drawn from the app's icon and name instead of its banner (for banners that crop badly). -->

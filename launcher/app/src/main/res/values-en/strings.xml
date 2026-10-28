@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- English Home date in tvOS style: "Monday, October 26". -->
+    <string name="date_format_home">EEEE, MMMM d</string>
+</resources>

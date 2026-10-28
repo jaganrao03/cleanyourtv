@@ -19,6 +19,14 @@ import org.junit.Test;
 
 public class WallpaperRotationTest {
 
+    @Test
+    public void galleryThumbnailSamplesFourKWithoutLoadingFullImage() {
+        assertEquals(16, WallpaperRotation.thumbnailSampleSize(3840, 2160));
+        assertEquals(8, WallpaperRotation.thumbnailSampleSize(2560, 1440));
+        assertEquals(2, WallpaperRotation.thumbnailSampleSize(640, 360));
+        assertEquals(1, WallpaperRotation.thumbnailSampleSize(0, 0));
+    }
+
     private static File touch(File dir, String name, int bytes) throws IOException {
         File f = new File(dir, name);
         try (FileOutputStream out = new FileOutputStream(f)) {

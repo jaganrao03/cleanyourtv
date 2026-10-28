@@ -18,6 +18,12 @@ final class WallpaperRotation {
         return ORDER_SEQUENTIAL.equals(order) || ORDER_SHUFFLE.equals(order);
     }
 
+    static int thumbnailSampleSize(int width, int height) {
+        int sample = 1;
+        while (width / sample > 320 || height / sample > 180) sample *= 2;
+        return sample;
+    }
+
     static List<File> images(File directory) {
         List<File> result = new ArrayList<>();
         File[] entries = directory == null ? null : directory.listFiles();

@@ -29,6 +29,8 @@ public class GlassView extends View {
     /** glass_style rim or halo: no sheen and no fill, only the crisp rim (and, for halo, a lighter outer glow). */
     private boolean flat;
     private boolean halo;
+    /** glass_style tv: a soft white glow and a faint sheen over the top of the tile; no fill, no rim. */
+    private boolean tv;
 
     public GlassView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -48,7 +50,7 @@ public class GlassView extends View {
     void setAccent(int argb) {
         if (argb == 0) {
             glowRgb = 0xFFFFFF;
-            glowAlpha = 0x30;
+            glowAlpha = tv ? 0x48 : 0x30;
             rim.setColor(0xCCFFFFFF);
         } else {
             glowRgb = argb & 0xFFFFFF;
@@ -65,8 +67,19 @@ public class GlassView extends View {
     void setStyle(String style) {
         flat = Config.GLASS_RIM.equals(style) || Config.GLASS_HALO.equals(style);
         halo = Config.GLASS_HALO.equals(style);
+        tv = Config.GLASS_TV.equals(style);
+        // The tv sheen is dimmer than a plain tile's, so the alpha follows the style both ways: leaving tv has to
+        // put a non-tv tile back to its own strength instead of keeping the sheen's.
+        glowAlpha = tv ? 0x48 : (glowRgb == 0xFFFFFF ? 0x30 : 0x70);
+        // The sheen's alpha is baked into the specular shader at layout time.
+        if (getHeight() > 0) specularShader(getHeight());
         rim.setStrokeWidth((flat ? 2f : 1.5f) * density);
         invalidate();
+    }
+
+    /** The top-down sheen over the glass, rebuilt whenever its height or the style's alpha changes. */
+    private void specularShader(int h) {
+        specular.setShader(new LinearGradient(0, 0, 0, h * 0.45f, tv ? 0x2EFFFFFF : 0x66FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP));
     }
 
     void setRadius(float px) {
@@ -78,7 +91,7 @@ public class GlassView extends View {
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
         fill.setShader(new LinearGradient(0, 0, 0, h, 0x3DFFFFFF, 0x12FFFFFF, Shader.TileMode.CLAMP));
-        specular.setShader(new LinearGradient(0, 0, 0, h * 0.45f, 0x66FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP));
+        specularShader(h);
     }
 
     @Override
@@ -103,6 +116,14 @@ public class GlassView extends View {
         }
         if (flat) {
             canvas.drawRoundRect(rect, radius, radius, rim);
+            return;
+        }
+        if (tv) {
+            // The tile shows through untouched: only the sheen over its top, under the glow drawn above.
+            canvas.save();
+            canvas.clipRect(rect.left, rect.top, rect.right, rect.top + rect.height() * 0.45f);
+            canvas.drawRoundRect(rect, radius, radius, specular);
+            canvas.restore();
             return;
         }
 

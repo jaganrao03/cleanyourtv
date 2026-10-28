@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A compact Control Centre chip: round icon and readable label. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:paddingTop="3dp"
+    android:paddingBottom="3dp"
+    android:focusable="true"
+    android:clickable="true"
+    android:background="@drawable/cc_row_focus">
+
+    <FrameLayout
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="@drawable/cc_chip_off"
+        android:duplicateParentState="true"
+        android:padding="10dp">
+
+        <ImageView
+            android:id="@+id/ccIcon"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:tint="#F2FFFFFF"
+            android:duplicateParentState="true"
+            android:contentDescription="@null" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/ccTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:textColor="#F2FFFFFF"
+        android:textSize="12sp"
+        android:fontFamily="@string/font_medium"
+        android:duplicateParentState="true"
+        android:singleLine="true" />
+</LinearLayout>

@@ -24,4 +24,19 @@ public class TopFadeTest {
         assertEquals(72f, TopFade.height(72, 72f), 0f);
         assertEquals(72f, TopFade.height(5000, 72f), 0f);
     }
+
+    @Test
+    public void theBandStopsAtTheParkedLineWithoutAFocusedTile() {
+        assertEquals(300f, TopFade.bandEdge(300f, Float.NaN, 12f), 0f);
+    }
+
+    @Test
+    public void theBandNeverReachesTheFocusedTilesZoomedTop() {
+        // Parked: the zoomed tile rises 4px above the line, the erasing ends its reach above that.
+        assertEquals(284f, TopFade.bandEdge(300f, 296f, 12f), 0f);
+        // Scrolling back in from above (Up from the second row below the dock): the focused row is never cut.
+        assertEquals(88f, TopFade.bandEdge(300f, 100f, 12f), 0f);
+        // A tile well below the line leaves the band where it parks.
+        assertEquals(300f, TopFade.bandEdge(300f, 520f, 12f), 0f);
+    }
 }

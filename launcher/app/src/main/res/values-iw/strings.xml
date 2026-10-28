@@ -147,4 +147,13 @@
     <string name="race_countdown_hours">%1$d שע׳ %2$d דק׳</string>
     <string name="race_countdown_days">%1$d ימ׳ %2$d שע׳</string>
     <string name="last_opened">פתיחה אחרונה: %1$s</string>
+    <string name="control_center">מרכז שליטה</string>
+    <string name="cc_home_short">בית</string>
+    <string name="cc_reorder_short">סידור מחדש</string>
+    <string name="bluetooth">בלוטות׳</string>
+    <string name="cc_picture_settings">הגדרות תמונה</string>
+    <string name="cc_sound_settings">הגדרות צליל</string>
+    <string name="cc_open">פתח</string>
+    <string name="cc_muted">מושתק</string>
+    <string name="date_format_home">@string/date_format</string>
 </resources>

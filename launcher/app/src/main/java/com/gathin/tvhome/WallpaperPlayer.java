@@ -51,7 +51,12 @@ final class WallpaperPlayer {
     private boolean active;
     private boolean closed;
     private boolean loading;
+    /** A Home press or the screen coming back on asked for the next picture, whatever the interval says. */
+    private boolean advanceNext;
     private String displayed = "";
+    /** The picture on screen, for whoever needs its file (the depth cutout of the clock overlay). */
+    private File shown;
+    private java.util.function.Consumer<File> pictureListener;
     /** wallpaper_captions: the shown picture's name from wallpapers/captions.txt; null when off or there are none. */
     private final TextView caption;
     private final Map<String, String> names;
@@ -115,6 +120,7 @@ final class WallpaperPlayer {
                 // The picture covers the whole screen: the root's plain colour under it is overdraw.
                 root.setBackground(null);
                 displayed = first.getName();
+                announced(first);
                 showCaption(false);
                 if (!displayed.equals(previous)) {
                     preferences.edit().putString("image", displayed)
@@ -130,6 +136,22 @@ final class WallpaperPlayer {
 
     void start() {
         active = true;
+        update();
+    }
+
+    /** Told the picture on screen now, and every one after it; the current one arrives immediately. */
+    void onPicture(java.util.function.Consumer<File> listener) {
+        pictureListener = listener;
+        if (shown != null) listener.accept(shown);
+    }
+
+    /**
+     * Home pressed, or the screen coming back on: move to the next picture now instead of waiting for the
+     * interval. The request survives a still-stopped activity and is consumed by the next update().
+     */
+    void advance() {
+        if (closed || files.size() < 2) return;
+        advanceNext = true;
         update();
     }
 
@@ -172,7 +194,11 @@ final class WallpaperPlayer {
         List<File> playable = playable();
         File selected = WallpaperRotation.find(playable, previous);
         long changed = preferences.getLong("changed", 0);
-        if (selected == null || WallpaperRotation.due(changed, System.currentTimeMillis(), interval)) {
+        boolean forced = advanceNext;
+        advanceNext = false;
+        if (forced) {
+            selected = WallpaperRotation.pick(playable, previous, order, random);
+        } else if (selected == null || WallpaperRotation.due(changed, System.currentTimeMillis(), interval)) {
             selected = WallpaperRotation.pick(playable, previous, order, random);
         }
         if (selected == null || selected.getName().equals(displayed)) return;
@@ -194,6 +220,7 @@ final class WallpaperPlayer {
                 }
                 show(bitmap);
                 displayed = next.getName();
+                announced(next);
                 showCaption(true);
                 if (!displayed.equals(previous) || changed == 0) {
                     preferences.edit().putString("image", displayed)
@@ -267,6 +294,11 @@ final class WallpaperPlayer {
         root.setBackground(null);
         image.setImageBitmap(bitmap);
         if (old != null && old != bitmap) image.postDelayed(old::recycle, 500);
+    }
+
+    private void announced(File picture) {
+        shown = picture;
+        if (pictureListener != null) pictureListener.accept(picture);
     }
 
     private Bitmap decode(File file) {
