@@ -6,6 +6,14 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class LockClockPlacementTest {
+    @Test public void visualClockGapAccountsForTheRealFaceAscent() {
+        // Representative synthetic line-box metrics; the TV render remains the acceptance check.
+        // Negative ascent and ink top: the empty space ABOVE the digit is -ascent+inkTop.
+        assertEquals(-52, LockClockPlacement.timeTopMargin(-250f, -142f, 16f, 8f, 64f));
+        // A different font's line box keeps the same requested visible gap.
+        assertEquals(36, LockClockPlacement.timeTopMargin(-100f, -80f, 16f, 8f, 64f));
+        assertEquals(64, LockClockPlacement.timeTopMargin(-40f, -48f, 0f, 4f, 64f));
+    }
     @org.junit.Test public void wideTimeIsCappedToFortyPercentOfScreen() {
         org.junit.Assert.assertEquals(0.8f, LockClockPlacement.clockWidthScale(1000f, 2000f), 0.001f);
         org.junit.Assert.assertEquals(1f, LockClockPlacement.clockWidthScale(760f, 2000f), 0.001f);

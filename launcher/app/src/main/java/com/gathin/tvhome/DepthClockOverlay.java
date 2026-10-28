@@ -5,11 +5,14 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapShader;
 import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RadialGradient;
 import android.graphics.Shader;
 import android.graphics.Typeface;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -115,6 +118,7 @@ final class DepthClockOverlay {
         date.setTextColor(0xF2FFFFFF);
         date.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
         date.setTypeface(lockScreenFace(activity, "SF-Pro-Text-Semibold.otf", R.string.font_medium));
+        date.setIncludeFontPadding(false);
         // The lock screen's text carries a soft shadow so it survives a bright photo behind it.
         date.setShadowLayer(12f * density(activity), 0f, 4f * density(activity), 0x59000000);
         date.setGravity(Gravity.CENTER);
@@ -136,11 +140,39 @@ final class DepthClockOverlay {
         time.setFontFeatureSettings("tnum");
         time.setIncludeFontPadding(false);
         time.setShadowLayer(20f * density(activity), 0f, 5f * density(activity), 0xA6000000);
-        // SF Pro's line box carries ~0.356em of air above the digits, which drops the time halfway down the
-        // photo. Lift the digits until they leave a lock-screen gap under the date rather than touching it.
-        float gap = 14f * density(activity);
-        time.setTranslationY(-(0.356f * time.getTextSize() - gap));
-        clockGroup.addView(time);
+        // Make the gap about the INK, not the font's line box. The old -0.356em translation
+        // guessed SF's ascent, leaving a narrow, font-dependent gap and an oversized layout box.
+        // Measure the actual top of a tabular time and the date's trailing descent. The
+        // 40%-of-screen cap above is horizontal textScaleX only: it does not alter these
+        // vertical metrics, even on narrow displays or at a different accessibility scale.
+        // A negative margin removes only the empty ascender space. The group now measures
+        // to the visible clock instead of leaving a translated view's oversized layout box.
+        Rect timeInk = new Rect();
+        time.getPaint().getTextBounds("23:58", 0, 5, timeInk);
+        LinearLayout.LayoutParams timeParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clockGroup.addView(time, timeParams);
+        // TextClock's date is localised, and changes at midnight. Measure the actual glyphs,
+        // not an English example whose descender may not exist in the current script.
+        Runnable updateGap = () -> {
+            String actualDate = date.getText().toString();
+            if (actualDate.isEmpty()) return;
+            Rect dateInk = new Rect();
+            date.getPaint().getTextBounds(actualDate, 0, actualDate.length(), dateInk);
+            int margin = LockClockPlacement.timeTopMargin(
+                    time.getPaint().getFontMetrics().ascent, timeInk.top,
+                    date.getPaint().getFontMetrics().descent, dateInk.bottom, 32f * density(activity));
+            if (timeParams.topMargin != margin) {
+                timeParams.topMargin = margin;
+                time.setLayoutParams(timeParams);
+            }
+        };
+        date.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+            @Override public void afterTextChanged(Editable s) { updateGap.run(); }
+        });
+        date.post(updateGap); // TextClock fills its text after attachment on some TV firmware.
     }
 
     private static float density(Activity activity) {

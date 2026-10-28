@@ -510,8 +510,11 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         h.card.setScaleY(focused && animations ? focusScale() : 1f);
         h.card.setTranslationY(focused ? h.liftPx() : 0f);
         h.card.setTranslationZ(focused ? h.elevationPx() : 0f);
-        h.banner.setScaleX(focused && advancedEffects ? 1.035f : 1f);
-        h.banner.setScaleY(focused && advancedEffects ? 1.035f : 1f);
+        float artworkScale = focused && animations && !reducedMotion
+                ? tvFocus ? 1.02f : advancedEffects ? 1.035f : 1f : 1f;
+        h.banner.animate().cancel();
+        h.banner.setScaleX(artworkScale);
+        h.banner.setScaleY(artworkScale);
         // A fully opaque banner covers the whole card (centerCrop), so the card's own fill under it is drawn for
         // nothing on every frame; keep it under banners with transparent parts and under icon tiles.
         h.card.setBackground(e.banner != null && e.banner.getOpacity() == PixelFormat.OPAQUE ? null : h.cardBackground);
@@ -701,8 +704,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         return !animations ? 1f : tvFocus ? TV_FOCUS_SCALE : advancedEffects ? 1.12f : 1.10f;
     }
 
-    /** glass_style tv: tvOS grows the focused tile by about 8%. */
-    static final float TV_FOCUS_SCALE = 1.08f;
+    /** glass_style tv: a restrained but visible lift instead of the default elastic zoom. */
+    static final float TV_FOCUS_SCALE = 1.10f;
 
     /** A vivid colour sampled from the app's banner (or icon), cached per entry; a card's accent when it set one. */
     int ambientColorAt(int position) {
@@ -993,17 +996,19 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                     view.animate().scaleX(s).scaleY(s)
                             .translationY(focused ? liftPx() : 0f)
                             .translationZ(focused ? elevationPx() : 0f)
-                            .setDuration(advancedEffects ? (focused ? 220 : 170) : (focused ? 260 : 180))
-                            .setInterpolator(focused && !overshoot ? new DecelerateInterpolator(1.5f)
+                            .setDuration(tvFocus ? (focused ? 190 : 160)
+                                    : advancedEffects ? (focused ? 220 : 170) : (focused ? 260 : 180))
+                            .setInterpolator(tvFocus || focused && !overshoot ? new DecelerateInterpolator(1.5f)
                                     : new OvershootInterpolator(focused ? (advancedEffects ? 0.7f : 1.6f) : 0f))
                             .withLayer().start();
-                    if (advancedEffects) {
-                        banner.animate().scaleX(focused ? 1.035f : 1f).scaleY(focused ? 1.035f : 1f)
-                                .setDuration(280).start();
+                    if (advancedEffects || tvFocus) {
+                        float artworkScale = focused ? (tvFocus ? 1.02f : 1.035f) : 1f;
+                        banner.animate().scaleX(artworkScale).scaleY(artworkScale)
+                                .setDuration(tvFocus ? 210 : 280).start();
                     }
                     name.animate().alpha(focused ? 1f : restNameAlpha)
                             .translationY(focused ? density * 4f : -density * 6f)
-                            .setDuration(220).start();
+                            .setDuration(tvFocus ? 180 : 220).start();
                 }
                 int pos = getBindingAdapterPosition();
                 if (focused && listener != null && pos != RecyclerView.NO_POSITION) {
@@ -1012,14 +1017,14 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             });
         }
 
-        /** How far the focused tile rises: 4dp with advanced effects or glass_style tv, else none. */
+        /** How far the focused tile rises: 6dp with tv style, 4dp with advanced effects. */
         float liftPx() {
-            return advancedEffects || tvFocus ? -4f * density : 0f;
+            return tvFocus ? -6f * density : advancedEffects ? -4f * density : 0f;
         }
 
         /** The focused tile's elevation: glass_style tv lifts it onto a wide soft shadow, advanced effects a light one. */
         float elevationPx() {
-            return tvFocus ? 16f * density : advancedEffects ? 8f * density : 0f;
+            return tvFocus ? 22f * density : advancedEffects ? 8f * density : 0f;
         }
     }
 }
